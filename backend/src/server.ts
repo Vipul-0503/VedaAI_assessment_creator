@@ -8,6 +8,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { connectDB } from './db';
 import { startWorker } from './worker'; 
+import assessmentRouter from './routes/assessmentRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -24,6 +25,9 @@ app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'OK', message: 'VedaAI Backend Server is running smoothly!' });
 });
 
+// Mount API Routes
+app.use('/api/assessments', assessmentRouter);
+
 // Start Server and Connect Databases
 const startServer = async () => {
   // Connect to MongoDB Atlas
@@ -31,7 +35,7 @@ const startServer = async () => {
 
   // Start the background worker queue listener to watch Upstash Redis
   startWorker(); 
-  
+
   app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     console.log(`Health check ready at http://localhost:${PORT}/health`);
