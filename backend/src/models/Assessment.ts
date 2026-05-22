@@ -8,6 +8,7 @@ export interface IAssessment extends Document {
   timeLimit: number; // in minutes
   totalMarks: number;
   status: 'pending' | 'completed' | 'failed'; // Used to track BullMQ progress
+  questions: Schema.Types.ObjectId[]; // <-- 1. Add this to your TypeScript Interface
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +22,8 @@ const AssessmentSchema = new Schema<IAssessment>(
     timeLimit: { type: Number, required: true, default: 60 },
     totalMarks: { type: Number, required: true, default: 0 },
     status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
+    // <-- 2. Add this to your Schema definition to establish the relation link
+    questions: [{ type: Schema.Types.ObjectId, ref: 'Question' }], 
   },
   { timestamps: true }
 );
