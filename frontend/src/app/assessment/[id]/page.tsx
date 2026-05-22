@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { ArrowLeft, Calendar, Clock, BarChart, FileText, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, Printer, Bell, ChevronDown } from "lucide-react";
 
 interface Question {
   _id: string;
@@ -25,7 +25,6 @@ interface AssessmentData {
 }
 
 export default function AssessmentViewer({ params }: { params: Promise<{ id: string }> }) {
-  // Safely unwrap the dynamic route parameters using React.use()
   const resolvedParams = use(params);
   const assessmentId = resolvedParams.id;
 
@@ -56,7 +55,7 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <Loader2 className="h-8 w-8 text-gray-800 animate-spin" />
-        <p className="text-sm font-medium text-gray-400">Loading your generated assessment paper...</p>
+        <p className="text-sm font-medium text-gray-400">Reading secure assignment files...</p>
       </div>
     );
   }
@@ -79,138 +78,176 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
   const totalMarks = assessment.questions?.reduce((sum, q) => sum + q.marks, 0) || 0;
 
   return (
-    <div className="flex flex-col space-y-6 max-w-4xl mx-auto pb-16">
-      {/* Dynamic Navigation Row Header */}
-      <header className="flex items-center justify-between bg-white border border-gray-200 rounded-2xl px-6 py-4 shadow-sm">
-        <Link href="/" className="flex items-center gap-2 text-sm text-gray-500 font-bold hover:text-gray-900 transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Dashboard</span>
-        </Link>
-        <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-          <span className="text-xs font-bold text-emerald-700 capitalize">{assessment.status}</span>
+    <div className="flex flex-col space-y-6">
+      
+      {/* 1. SCREEN UTILITY FOR PRISTINE PRINT OVERRIDES */}
+      <style jsx global>{`
+        @media print {
+          header, .no-print, button, .app-top-header, .dark-action-banner {
+            display: none !important;
+          }
+          body, html, main, .flex-1 {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .figma-paper-sheet {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            background: white !important;
+          }
+          .printable-question-block {
+            page-break-inside: avoid !important;
+            margin-bottom: 1.5rem !important;
+          }
+        }
+      `}</style>
+
+      {/* 2. MAIN WEB APP TOP HEADER NAVBAR */}
+      <header className="flex items-center justify-between bg-white border border-gray-200 rounded-2xl px-6 py-3 shadow-sm app-top-header no-print">
+        <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+          <Link href="/" className="cursor-pointer hover:text-gray-900 transition-colors">←</Link>
+          <span className="text-gray-900 font-semibold flex items-center gap-1.5">
+            <span className="text-gray-400 font-normal">Create New</span>
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Bell className="h-5 w-5 text-gray-600 cursor-pointer hover:text-black" />
+            <span className="absolute top-0 right-0 h-2 w-2 bg-orange-500 rounded-full"></span>
+          </div>
+          <div className="flex items-center gap-2 border-l border-gray-200 pl-4 cursor-pointer group">
+            <div className="h-8 w-8 rounded-full bg-orange-100 font-bold text-orange-700 text-xs flex items-center justify-center">JD</div>
+            <span className="text-sm font-semibold text-gray-700 group-hover:text-black">John Doe</span>
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          </div>
         </div>
       </header>
 
-      {/* Test Meta Configuration Summary Header Grid */}
-      <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm space-y-6">
-        <div>
-          <span className="text-[10px] uppercase font-extrabold tracking-widest text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md">VedaAI Paper</span>
-          <h1 className="text-2xl font-black text-gray-900 mt-3 tracking-tight">{assessment.title}</h1>
-          <p className="text-sm text-gray-500 font-medium mt-1.5">{assessment.topic}</p>
+      {/* 3. FIGMA DARK CONTROLS BANNER LAYOUT */}
+      <div className="bg-[#2c2c2c] rounded-2xl p-6 shadow-sm no-print dark-action-banner flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="space-y-1">
+          <p className="text-xs sm:text-sm font-medium text-gray-200 leading-relaxed">
+            Certainly, Lakshya! Here are customized Question Paper for your CBSE Grade 12 Chemistry classes on the NCERT chapters:
+          </p>
         </div>
+        
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Link out to the clean dedicated student portal interface */}
+          <Link href={`/assessment/${assessment._id}/attempt`}>
+            <button className="bg-orange-600 hover:bg-orange-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition-all cursor-pointer">
+              Simulate Student Attempt Mode
+            </button>
+          </Link>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-400">
-              <Clock className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Duration</p>
-              <p className="text-sm font-bold text-gray-800">{assessment.timeLimit} Mins</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-400">
-              <BarChart className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Difficulty</p>
-              <p className="text-sm font-bold text-gray-800 capitalize">{assessment.difficulty}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-400">
-              <FileText className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total Marks</p>
-              <p className="text-sm font-bold text-gray-800">{totalMarks} Marks</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-gray-400">
-              <Calendar className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Generated On</p>
-              <p className="text-sm font-bold text-gray-800">
-                {new Date(assessment.createdAt).toLocaleDateString("en-GB")}
-              </p>
-            </div>
-          </div>
+          <button 
+            onClick={() => window.print()}
+            className="flex items-center gap-2 bg-white text-gray-900 font-bold px-4 py-2 rounded-xl text-xs shadow-sm hover:bg-gray-100 transition-all cursor-pointer"
+          >
+            <Printer className="h-3.5 w-3.5" />
+            <span>Download as PDF</span>
+          </button>
         </div>
       </div>
 
-      {/* Rendered Questions Sheet Block Section */}
-      <div className="space-y-4">
-        <h2 className="text-xs font-black text-gray-400 uppercase tracking-wider pl-2">Questions Paper Sheet</h2>
+      {/* 4. ASSIGNMENT DOCUMENT GREY FRAME BACKDROP */}
+      <div className="bg-gray-400/20 border border-gray-200/60 rounded-3xl p-4 sm:p-8 flex justify-center">
         
-        {assessment.questions && assessment.questions.length > 0 ? (
-          <div className="space-y-4">
+        {/* THE MOCK PAPERS CARD */}
+        <div className="figma-paper-sheet bg-white w-full max-w-3xl rounded-xl shadow-md border border-gray-200/80 p-8 sm:p-12 space-y-6">
+          
+          {/* INSTITUTION TEXT BLOCKS */}
+          <div className="text-center space-y-1.5 border-b border-gray-100 pb-6">
+            <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">Delhi Public School, Sector-4, Bokaro</h2>
+            <p className="text-sm font-bold text-gray-600">Subject: Chemistry</p>
+            <p className="text-xs font-bold text-gray-500">Class: 12th</p>
+          </div>
+
+          {/* PARAMETER INFORMATION ROWS */}
+          <div className="flex justify-between items-center text-xs font-bold text-gray-700 pt-1">
+            <div>Time Allowed: {assessment.timeLimit} minutes</div>
+            <div>Maximum Marks: {totalMarks}</div>
+          </div>
+
+          <p className="text-[11px] font-bold text-gray-400 italic">All questions are compulsory unless stated otherwise.</p>
+
+          {/* STUDENT ASSIGNMENT INPUT FILL FIELDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md text-xs font-bold text-gray-700 pt-2 pb-4">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0">Name:</span>
+              <div className="flex-1 border-b border-gray-400 h-4"></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="shrink-0">Roll Number:</span>
+              <div className="flex-1 border-b border-gray-400 h-4"></div>
+            </div>
+            <div className="flex items-center gap-2 sm:col-span-2">
+              <span className="shrink-0">Class & Section:</span>
+              <div className="flex-1 border-b border-gray-400 h-4"></div>
+            </div>
+          </div>
+
+          <div className="text-center py-2">
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-900 border-b-2 border-gray-900 inline-block px-4">Section A</h3>
+          </div>
+
+          {/* EXAMINATION TEST LIST */}
+          <div className="space-y-6 pt-2">
             {assessment.questions.map((question, index) => (
-              <div key={question._id} className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
-                {/* Question Identification Index Row */}
-                <div className="flex justify-between items-start gap-4">
-                  <span className="text-xs font-extrabold text-gray-400 uppercase bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-md">
-                    Question {index + 1}
-                  </span>
-                  <span className="text-xs font-bold text-gray-500 bg-gray-100/60 px-2 py-0.5 rounded-md">
-                    {question.marks} {question.marks === 1 ? "Mark" : "Marks"}
+              <div key={question._id} className="printable-question-block space-y-3">
+                
+                {/* Question line items prompting text wrapper layout */}
+                <div className="flex items-start justify-between gap-4">
+                  <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                    <span className="mr-1">{index + 1}.</span>
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mr-1.5">[{assessment.difficulty}]</span>
+                    {question.questionText}
+                  </p>
+                  <span className="text-xs font-bold text-gray-500 shrink-0">
+                    [{question.marks} {question.marks === 1 ? "Mark" : "Marks"}]
                   </span>
                 </div>
 
-                {/* Main Prompt Text */}
-                <p className="text-base font-semibold text-gray-900 leading-relaxed">
-                  {question.questionText}
-                </p>
-
-                {/* Render Options if Multiple Choice Question */}
+                {/* Option matrix parsing system */}
                 {question.options && question.options.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                  <div className="grid grid-cols-1 gap-2.5 pl-6">
                     {question.options.map((option, optIdx) => {
-                      const prefix = String.fromCharCode(65 + optIdx); // Converts indices to A, B, C, D
-                      const isCorrect = question.correctAnswer === option || question.correctAnswer === prefix;
-                      
+                      const prefix = String.fromCharCode(65 + optIdx);
                       return (
-                        <div 
-                          key={optIdx} 
-                          className={`flex items-center gap-3 p-3 border rounded-xl text-sm font-medium transition-all ${
-                            isCorrect 
-                              ? "border-emerald-200 bg-emerald-50/40 text-emerald-900" 
-                              : "border-gray-100 bg-gray-50/20 text-gray-700"
-                          }`}
-                        >
-                          <span className={`h-6 w-6 shrink-0 flex items-center justify-center rounded-md font-bold text-xs ${
-                            isCorrect ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-500"
-                          }`}>
-                            {prefix}
-                          </span>
-                          <span>{option}</span>
+                        <div key={optIdx} className="flex items-start gap-2.5 text-xs font-medium text-gray-700">
+                          <span className="h-5 w-5 shrink-0 bg-gray-100 rounded flex items-center justify-center font-bold text-[10px] text-gray-500">{prefix}</span>
+                          <span className="pt-0.5">{option}</span>
                         </div>
                       );
                     })}
                   </div>
                 )}
-                
-                {/* Show Explicit Answer Key for Non-MCQ types */}
-                {(!question.options || question.options.length === 0) && question.correctAnswer && (
-                  <div className="mt-3 p-3.5 bg-emerald-50/30 border border-emerald-100 rounded-xl">
-                    <span className="text-[10px] font-extrabold text-emerald-700 uppercase block tracking-wider">Correct Answer Reference Key</span>
-                    <p className="text-xs font-medium text-emerald-800 mt-1">{question.correctAnswer}</p>
-                  </div>
-                )}
               </div>
             ))}
           </div>
-        ) : (
-          <div className="bg-white border border-gray-200 rounded-2xl p-12 text-center text-sm font-medium text-gray-400">
-            No questions are populated inside this assessment profile.
+
+          {/* LIVE WORKSPACE ANSWER KEY - VISIBLE IN APP, AUTO HIDDEN ON PRINTER PAGES */}
+          <div className="mt-12 pt-8 border-t border-dashed border-gray-200 no-print space-y-4">
+            <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Answer Key Reference:</h3>
+            <div className="space-y-3">
+              {assessment.questions.map((question, index) => (
+                <div key={question._id} className="text-xs text-gray-600 font-medium">
+                  <span className="font-bold text-gray-900">{index + 1}.</span> {question.correctAnswer || "Subjective grading evaluation required."}
+                </div>
+              ))}
+            </div>
           </div>
-        )}
+
+          {/* FINAL BOTTOM LINE SHEET NOTATION */}
+          <div className="text-center pt-8 text-[11px] font-bold text-gray-400 tracking-wide uppercase">
+            End of Question Paper
+          </div>
+
+        </div>
       </div>
     </div>
   );
