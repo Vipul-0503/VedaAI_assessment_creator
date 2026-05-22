@@ -17,6 +17,8 @@ export default function CreateAssignment() {
   const [loading, setLoading] = useState(false);
   const [topic, setTopic] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   
   const [rows, setRows] = useState<QuestionRow[]>([
     { id: "1", type: "Multiple Choice Questions", count: 4, marks: 1 },
@@ -53,23 +55,41 @@ export default function CreateAssignment() {
       alert("Please provide additional configuration details in the text area!");
       return;
     }
+    
     setLoading(true);
+    
     try {
-      const response = await fetch("http://localhost:5000/api/assessments/generate", {
+      // 1. Initialize a clean multipart data container
+      const formData = new FormData();
+      
+      // 2. Append all custom config parameters matching our backend fields
+      // Using a snippet of the topic text as a fallback title
+      formData.append("title", topic.slice(0, 30) || "AI Generated Assessment");
+      formData.append("topic", topic);
+      formData.append("difficulty", "medium"); // Fixed to match lowercase backend enum validator
+      formData.append("timeLimit", "45");
+      
+      // 3. If a document is loaded into the uploader area, attach its binary data stream
+      if (selectedFile) {
+        formData.append("file", selectedFile);
+      }
+
+      // 4. Fire the request directly to our running server endpoint
+      const response = await fetch("http://localhost:5000/api/assessments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: topic,
-          title: topic,
-          difficulty: "Medium",
-          timeLimit: 45
-        })
+        body: formData, // Fetch automatically manages multi-part headers when receiving FormData
       });
+
       if (response.ok) {
+        // Redirect back to Dashboard grid on success
         router.push("/");
+      } else {
+        const errorData = await response.json();
+        alert(`Generation failed: ${errorData.error || 'Unknown error occurred'}`);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to connect to the creation pipeline:", err);
+      alert("Network error: Could not reach the backend generation server.");
     } finally {
       setLoading(false);
     }
@@ -102,7 +122,7 @@ export default function CreateAssignment() {
       {/* Page Heading Title Content */}
       <div className="space-y-4 mt-2">
         <div className="flex items-center gap-3.5">
-          {/* Glowing Emerald Status Dot Core (increased sizing slightly) & Outer Ring Accent */}
+          {/* Glowing Emerald Status Dot Core & Outer Ring Accent */}
           <div className="flex items-center justify-center h-5 w-5 bg-emerald-100 rounded-full shrink-0">
             <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>
           </div>
@@ -126,11 +146,67 @@ export default function CreateAssignment() {
         </div>
 
         {/* Drag & Drop Asset Window Box */}
-        <div className="border border-dashed border-gray-200 rounded-2xl p-8 bg-gray-50/40 flex flex-col items-center justify-center text-center">
-          <UploadCloud className="h-5 w-5 text-gray-400 mb-2" />
-          <p className="text-sm font-semibold text-gray-700">Choose a file or drag & drop it here</p>
-          <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF up to 10MB</p>
-          <button className="text-xs font-bold text-gray-600 underline mt-4 hover:text-black transition-colors">Browse Files</button>
+        <div 
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+              setSelectedFile(e.dataTransfer.files[0]);
+            }
+          }}
+          className={`border border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all ${
+            isDragging 
+              ? "border-emerald-500 bg-emerald-50/30" 
+              : selectedFile 
+                ? "border-gray-300 bg-gray-50/20" 
+                : "border-gray-200 bg-gray-50/40"
+          }`}
+        >
+          <UploadCloud className={`h-5 w-5 mb-2 transition-colors ${selectedFile ? 'text-emerald-500' : 'text-gray-400'}`} />
+          
+          {selectedFile ? (
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-gray-700">Selected File:</p>
+              <p className="text-xs font-mono text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md inline-block max-w-[250px] truncate">
+                {selectedFile.name}
+              </p>
+              <button 
+                onClick={() => setSelectedFile(null)}
+                className="block text-[11px] font-bold text-red-500 hover:text-red-600 hover:underline mx-auto mt-2"
+              >
+                Remove File
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-gray-700">Choose a file or drag & drop it here</p>
+              <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF up to 10MB</p>
+              
+              {/* Hidden file input controlled by the button label */}
+              <input 
+                type="file" 
+                id="file-upload" 
+                accept=".jpg,.jpeg,.png,.pdf"
+                className="hidden" 
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setSelectedFile(e.target.files[0]);
+                  }
+                }}
+              />
+              <label 
+                htmlFor="file-upload" 
+                className="text-xs font-bold text-gray-600 underline mt-4 hover:text-black cursor-pointer block transition-colors"
+              >
+                Browse Files
+              </label>
+            </>
+          )}
         </div>
 
         <p className="text-center text-[11px] font-medium text-gray-400 -mt-2">Upload images of your preferred document/image</p>

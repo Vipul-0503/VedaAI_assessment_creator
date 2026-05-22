@@ -1,13 +1,30 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
 import { Assessment } from '../models/Assessment';
 import { assessmentQueue } from '../queue';
 
 const router = Router();
 
-// 1. POST /api/assessments - Trigger a new AI assessment generation
-router.post('/', async (req: Request, res: Response): Promise<void> => {
+// Configure Multer storage engine
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    // Generate a secure, unique filename combining a timestamp and original name
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+const upload = multer({ storage });
+
+// 1. POST /api/assessments - Trigger a new AI assessment generation (Accepts file upload)
+router.post('/', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
   try {
     const { title, topic, difficulty, timeLimit } = req.body;
+    const file = req.file; // Accessed via Multer middleware
 
     if (!title || !topic || !difficulty) {
        res.status(400).json({ error: 'Title, topic, and difficulty are required fields.' });
@@ -24,12 +41,24 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     await newAssessment.save();
 
-    const job = await assessmentQueue.add(`generate-${newAssessment._id}`, {
+    // Prepare options for background processing worker
+    const jobPayload: any = {
       assessmentId: newAssessment._id,
       title: newAssessment.title,
       topic: newAssessment.topic,
       difficulty: newAssessment.difficulty,
-    });
+    };
+
+    // If a document was successfully submitted, embed its file details into the background task
+    if (file) {
+      jobPayload.file = {
+        path: file.path,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+      };
+    }
+
+    const job = await assessmentQueue.add(`generate-${newAssessment._id}`, jobPayload);
 
     res.status(201).json({
       message: 'Assessment generation initialized in the background.',
