@@ -40,6 +40,10 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
           throw new Error("Could not find the requested assessment profile.");
         }
         const data = await response.json();
+        
+        // DEBUG LOG: Check this in your browser console (F12)
+        console.log("DEBUG_DATA:", data); 
+        
         setAssessment(data);
       } catch (err: any) {
         setError(err.message || "An unexpected network error occurred.");
@@ -77,34 +81,25 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
     );
   }
 
-  const totalMarks = assessment.questions?.reduce((sum, q) => sum + q.marks, 0) || 0;
+  // Defensive calculation: default to 1 mark if undefined
+  const totalMarks = assessment.questions?.reduce((sum, q) => sum + (q.marks ?? 1), 0) || 0;
 
   return (
     <div className="flex flex-col space-y-6 min-h-screen bg-[#F1F5F9] pb-20">
       
-      {/* 1. PRINT STYLES */}
       <style jsx global>{`
         @media print {
           .no-print, header, .action-banner, button { display: none !important; }
           body { background: white !important; margin: 0; padding: 0; }
-          .paper-sheet { 
-            box-shadow: none !important; 
-            border: none !important; 
-            width: 100% !important; 
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 20mm !important;
-          }
+          .paper-sheet { box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 20mm !important; }
           .printable-block { page-break-inside: avoid; }
         }
       `}</style>
 
-      {/* 2. TOP NAV (Breadcrumb & Profile) */}
       <header className="flex items-center justify-between bg-white border-b border-gray-200 px-8 py-4 no-print">
         <div className="flex items-center gap-2 text-sm font-bold text-gray-400">
           <Link href="/" className="hover:text-black">← Create New</Link>
         </div>
-        
         <div className="flex items-center gap-4">
           <Bell className="h-5 w-5 text-gray-400 cursor-pointer" />
           <div className="flex items-center gap-2 border-l border-gray-100 pl-4">
@@ -115,11 +110,10 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
         </div>
       </header>
 
-      {/* 3. DARK ACTION BANNER */}
       <div className="max-w-5xl mx-auto w-full px-4 no-print">
         <div className="bg-[#1A1A1A] rounded-2xl p-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-xl">
           <p className="text-gray-300 text-sm font-medium">
-            Certainly, Lakshya! Here are customized Question Paper for your CBSE Grade {assessment.difficulty === 'hard' ? '12' : '10'} {assessment.topic} classes:
+            Certainly, Lakshya! Here is your customized Question Paper for {assessment.topic}.
           </p>
           <button 
             onClick={handlePrint}
@@ -131,11 +125,8 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {/* 4. THE PAPER PREVIEW FRAME */}
       <div className="max-w-5xl mx-auto w-full px-4 flex justify-center">
         <div className="paper-sheet bg-white w-full max-w-4xl shadow-2xl border border-gray-200 p-12 sm:p-20 space-y-8 min-h-[1100px]">
-          
-          {/* Institution Header */}
           <div className="text-center space-y-2 border-b-2 border-gray-900 pb-8">
             <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">Delhi Public School, Sector-4, Bokaro</h1>
             <div className="flex justify-center gap-8 text-sm font-bold text-gray-600">
@@ -144,7 +135,6 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
-          {/* Exam Specs */}
           <div className="flex justify-between text-sm font-black text-gray-800">
             <span>Time Allowed: {assessment.timeLimit} minutes</span>
             <span>Maximum Marks: {totalMarks}</span>
@@ -152,43 +142,27 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
 
           <p className="text-xs font-bold text-gray-400 italic">All questions are compulsory unless stated otherwise.</p>
 
-          {/* Student Info Lines */}
           <div className="grid grid-cols-2 gap-y-6 gap-x-12 py-4">
-            <div className="border-b border-black flex gap-2 text-sm font-bold">
-              <span>Name:</span>
-              <div className="flex-1"></div>
-            </div>
-            <div className="border-b border-black flex gap-2 text-sm font-bold">
-              <span>Roll Number:</span>
-              <div className="flex-1"></div>
-            </div>
-            <div className="border-b border-black flex gap-2 text-sm font-bold col-span-2">
-              <span>Class & Section:</span>
-              <div className="flex-1"></div>
-            </div>
+            <div className="border-b border-black flex gap-2 text-sm font-bold"><span>Name:</span><div className="flex-1"></div></div>
+            <div className="border-b border-black flex gap-2 text-sm font-bold"><span>Roll Number:</span><div className="flex-1"></div></div>
+            <div className="border-b border-black flex gap-2 text-sm font-bold col-span-2"><span>Class & Section:</span><div className="flex-1"></div></div>
           </div>
 
-          {/* Section Divider */}
-          <div className="text-center py-6">
-            <h2 className="text-lg font-black uppercase border-b-4 border-gray-900 inline-block px-10 pb-1">Section A</h2>
-          </div>
+          <div className="text-center py-6"><h2 className="text-lg font-black uppercase border-b-4 border-gray-900 inline-block px-10 pb-1">Section A</h2></div>
 
-          {/* Questions List */}
           <div className="space-y-10">
-             {assessment.questions.map((question, index) => (
+             {assessment.questions?.map((question, index) => (
               <div key={question._id} className="printable-block space-y-4">
                 <div className="flex justify-between gap-6">
                   <div className="text-sm font-bold text-gray-900 flex gap-3">
                     <span className="shrink-0">{index + 1}.</span>
                     <p className="leading-relaxed">
                       {question.questionText}
-                      <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded uppercase tracking-widest">{question.difficulty || assessment.difficulty}</span>
+                      <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded uppercase tracking-widest">{assessment.difficulty}</span>
                     </p>
                   </div>
-                  <span className="text-sm font-black text-gray-900 shrink-0">[{question.marks} Marks]</span>
+                  <span className="text-sm font-black text-gray-900 shrink-0">[{question.marks ?? 1} Marks]</span>
                 </div>
-
-                {/* Multiple Choice Options */}
                 {question.options && question.options.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 pl-8">
                     {question.options.map((option, optIdx) => (
@@ -203,16 +177,14 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
             ))}
           </div>
 
-          {/* End Paper Notation */}
           <div className="pt-10 text-center border-t border-gray-100">
             <p className="text-xs font-black text-gray-300 uppercase tracking-widest">End of Question Paper</p>
           </div>
 
-          {/* Teacher's Answer Key (Only in UI, hidden on Print) */}
           <div className="mt-20 p-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 no-print space-y-6">
              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Answer Key Reference:</h3>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {assessment.questions.map((q, i) => (
+                {assessment.questions?.map((q, i) => (
                   <div key={q._id} className="text-xs font-bold text-slate-600">
                     <span className="text-slate-900 mr-2">{i+1}.</span> 
                     {q.correctAnswer || "Check reference materials"}
