@@ -6,7 +6,7 @@ import { assessmentQueue } from '../queue';
 
 const router = Router();
 
-// Configure Multer storage engine
+// Configure Multer storage engine to save files in the 'uploads/' folder
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
@@ -22,33 +22,35 @@ const upload = multer({ storage });
 // 1. POST /api/assessments - Trigger a new AI assessment generation
 router.post('/', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
   try {
-    const { title, topic, difficulty, timeLimit } = req.body;
+    // FIXED: Destructured additionalInfo directly from the request body!
+    const { title, topic, difficulty, timeLimit, questionConfigs, additionalInfo } = req.body;
     const file = req.file;
 
-    if (!title || !topic || !difficulty) {
-       res.status(400).json({ error: 'Title, topic, and difficulty are required fields.' });
-       return;
-    }
+    // Build temporary fallbacks for the initial record so empty values don't crash validation
+    const finalTitle = title || "Generating Title...";
+    const finalTopic = topic || "Processing Document Content...";
 
-    // Creating the assessment record
+    // Creating the initial assessment record in MongoDB
     const newAssessment = new Assessment({
-      title,
-      topic,
-      difficulty: difficulty.toLowerCase(), // Normalizing to lowercase for enum consistency
+      title: finalTitle,
+      topic: finalTopic,
+      difficulty: difficulty ? difficulty.toLowerCase() : 'medium',
       timeLimit: timeLimit ? Number(timeLimit) : 60,
       status: 'pending',
     });
 
     await newAssessment.save();
 
-    // Prepare options for background processing worker
+    // Prepare payload for the background processing worker
     const jobPayload: any = {
       assessmentId: newAssessment._id,
-      title: newAssessment.title,
-      topic: newAssessment.topic,
       difficulty: newAssessment.difficulty,
+      questionConfigs: questionConfigs ? JSON.parse(questionConfigs) : [], 
+      // FIXED: Attached additionalInfo into the job parameters safely!
+      additionalInfo: additionalInfo || title || topic || '', 
     };
 
+    // If a file was uploaded, attach its metadata so the worker can process it
     if (file) {
       jobPayload.file = {
         path: file.path,
@@ -57,20 +59,19 @@ router.post('/', upload.single('file'), async (req: Request, res: Response): Pro
       };
     }
 
+    // Add the task to the queue for the worker to pick up
     const job = await assessmentQueue.add(`generate-${newAssessment._id}`, jobPayload);
 
-    res.status(201).json({
-      message: 'Assessment generation initialized.',
-      assessmentId: newAssessment._id,
-      jobId: job.id,
-    });
+    // CRITICAL REDIRECT PREPARATION: Return the full assessment object containing the fresh ID
+    res.status(201).json(newAssessment);
+    
   } catch (error: any) {
     console.error('Error triggering assessment generation:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
-// 2. GET /api/assessments - Fetch all assessments
+// 2. GET /api/assessments - Fetch all assessments list
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const assessments = await Assessment.find().sort({ createdAt: -1 }).select('-questions');
@@ -81,7 +82,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-// 3. GET /api/assessments/:id - Fetch single assessment with questions
+// 3. GET /api/assessments/:id - Fetch single assessment details
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;

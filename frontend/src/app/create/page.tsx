@@ -1,23 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowLeft, PlusCircle, UploadCloud, CheckCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, LayoutGrid, Bell, ChevronDown, UploadCloud, Calendar, Plus, X, Mic, Loader2 } from "lucide-react";
 
-export default function CreateAssessmentPage() {
+interface QuestionRow {
+  id: string;
+  type: string;
+  count: number;
+  marks: number;
+}
+
+export default function CreateAssignment() {
   const router = useRouter();
-
-  // Form Fields State
-  const [title, setTitle] = useState("");
-  const [topic, setTopic] = useState("");
-  const [difficulty, setDifficulty] = useState("medium"); // Default to lowercase
-  const [timeLimit, setTimeLimit] = useState(60);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State Trackers bound back to the original Figma layout
+  const [loading, setLoading] = useState(false);
+  const [dueDate, setDueDate] = useState("");
+  const [additionalInfo, setAdditionalInfo] = useState(""); 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  const [rows, setRows] = useState<QuestionRow[]>([
+    { id: "1", type: "Multiple Choice Questions", count: 4, marks: 1 },
+    { id: "2", type: "Short Questions", count: 3, marks: 2 },
+    { id: "3", type: "Diagram/Graph-Based Questions", count: 5, marks: 5 },
+    { id: "4", type: "Numerical Problems", count: 5, marks: 5 },
+  ]);
 
-  // Status State Engines
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const questionTypes = [
+    "Multiple Choice Questions", 
+    "Short Questions", 
+    "Diagram/Graph-Based Questions", 
+    "Numerical Problems", 
+    "Long Essay Questions"
+  ];
+
+  const updateRow = (id: string, field: "count" | "marks", val: number) => {
+    setRows(rows.map(r => r.id === id ? { ...r, [field]: Math.max(1, r[field] + val) } : r));
+  };
+
+  const addRow = () => {
+    setRows([...rows, { id: Date.now().toString(), type: "Multiple Choice Questions", count: 1, marks: 1 }]);
+  };
+
+  const deleteRow = (id: string) => {
+    if (rows.length > 1) setRows(rows.filter(r => r.id !== id));
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -25,120 +55,243 @@ export default function CreateAssessmentPage() {
     }
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (submitting) return;
+  const totalQuestions = rows.reduce((sum, r) => sum + r.count, 0);
+  const totalMarks = rows.reduce((sum, r) => sum + (r.count * r.marks), 0);
+
+  const handleSubmit = async () => {
+    // Fallback topic if additional info is completely empty
+    const extractedTopic = additionalInfo.trim() || "Uploaded Document Assessment";
+
+    setLoading(true);
+    const formData = new FormData();
+    
+    // Mapping back precisely to match your backend model constraints
+    formData.append("title", extractedTopic); 
+    formData.append("topic", extractedTopic);
+    formData.append("difficulty", "Medium");
+    formData.append("questionConfigs", JSON.stringify(rows));
+    formData.append("additionalInfo", additionalInfo);
+    
+    if (selectedFile) {
+      formData.append("file", selectedFile);
+    }
 
     try {
-      setSubmitting(true);
-      setError(null);
-
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("topic", topic);
-      formData.append("difficulty", difficulty);
-      formData.append("timeLimit", String(timeLimit));
-
-      if (selectedFile) {
-        formData.append("file", selectedFile);
-      }
-
       const response = await fetch("http://localhost:5000/api/assessments", {
         method: "POST",
         body: formData,
       });
-
-      if (!response.ok) {
+      if (response.ok) {
+        const savedAssessment = await response.json();
+        
+        // Extract the fresh database identifier string
+        const assessmentId = savedAssessment._id || savedAssessment.id;
+        
+        if (assessmentId) {
+          // Route straight to our beautiful polling layout
+          router.push(`/create/loading/${assessmentId}`);
+        } else {
+          router.push("/");
+        }
+      } else {
         const errData = await response.json();
-        throw new Error(errData.error || "Failed to initialize assessment generation.");
+        alert(`Generation Error: ${errData.error || 'Check server logs'}`);
       }
-
-      setSuccess(true);
-      setTimeout(() => {
-        router.push("/");
-      }, 2000);
-
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to connect to the generation backend service.");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <div className="mb-6">
-        <button 
-          onClick={() => router.push("/")}
-          className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Back to Dashboard</span>
-        </button>
+    <div className="flex flex-col space-y-6 max-w-4xl mx-auto pb-12">
+      {/* Top Header Navigation */}
+      <header className="flex items-center justify-between bg-white border border-gray-200 rounded-2xl px-6 py-3 shadow-sm">
+        <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+          <button type="button" onClick={() => router.back()} className="cursor-pointer hover:text-gray-900 transition-colors">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <LayoutGrid className="h-4 w-4 text-gray-400" strokeWidth={2.5} />
+          <span className="text-gray-400 font-semibold cursor-pointer">Assignment</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Bell className="h-5 w-5 text-gray-600 cursor-pointer" />
+            <span className="absolute top-0 right-0 h-2 w-2 bg-orange-500 rounded-full"></span>
+          </div>
+          <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+            <div className="h-8 w-8 rounded-full bg-orange-100 font-bold text-orange-700 text-xs flex items-center justify-center">JD</div>
+            <span className="text-sm font-semibold text-gray-700">John Doe</span>
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          </div>
+        </div>
+      </header>
+
+      {/* Reverted exactly to Figma Header style */}
+      <div className="space-y-4 mt-2">
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center justify-center h-5 w-5 bg-emerald-100 rounded-full shrink-0">
+            <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-gray-900 tracking-tight leading-none">Create Assignment</h1>
+            <p className="text-xs text-gray-400 mt-1.5">Set up a new assignment for your students</p>
+          </div>
+        </div>
+        <div className="relative w-full h-[3px] bg-gray-100 rounded-full overflow-hidden">
+          <div className="absolute left-0 top-0 h-full w-1/2 bg-gray-500 rounded-full"></div>
+        </div>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-3xl p-6 sm:p-10 shadow-sm space-y-8">
+      {/* Workspace Settings Card */}
+      <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm space-y-6 mt-2">
         <div>
-          <h1 className="text-xl font-black text-gray-900 tracking-tight uppercase">AI Assessment Creator</h1>
-          <p className="text-xs text-gray-400 font-medium mt-1">Configure parameters or feed textbook source materials to let VedaAI build test frameworks</p>
+          <h3 className="text-sm font-bold text-gray-900">Assignment Details</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Basic information about your assignment</p>
         </div>
 
-        {success ? (
-          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-6 text-center space-y-3 py-12">
-            <CheckCircle className="h-10 w-10 text-emerald-500 mx-auto animate-bounce" />
-            <h3 className="text-sm font-bold text-emerald-900">Generation Initialized!</h3>
-            <p className="text-xs text-emerald-600">Background workers are compiling questions. Redirecting to home dashboard...</p>
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileChange}
+          className="hidden" 
+          accept="image/*,application/pdf" 
+        />
+
+        {/* Drag & Drop Frame */}
+        <div 
+          onClick={() => fileInputRef.current?.click()}
+          className={`border border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
+            selectedFile ? 'border-emerald-300 bg-emerald-50/20' : 'border-gray-200 bg-gray-50/40 hover:bg-gray-50/80'
+          }`}
+        >
+          <UploadCloud className={`h-5 w-5 mb-2 ${selectedFile ? 'text-emerald-500' : 'text-gray-400'}`} />
+          {selectedFile ? (
+            <div>
+              <p className="text-sm font-bold text-emerald-800">File Selected Successfully</p>
+              <p className="text-xs text-emerald-600 font-medium mt-0.5">{selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold text-gray-700">Choose a file or drag & drop it here</p>
+              <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF up to 10MB</p>
+            </div>
+          )}
+          <button type="button" className="text-xs font-bold text-gray-600 underline mt-4 hover:text-black">
+            {selectedFile ? 'Change File' : 'Browse Files'}
+          </button>
+        </div>
+
+        <p className="text-center text-[11px] font-medium text-gray-400 -mt-2">Upload images of your preferred document/image</p>
+
+        {/* Due Date: Removed the Lucide icon element because input type="date" displays its own browser icon */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-gray-800 block">Due Date</label>
+          <div className="relative max-w-sm">
+            <input 
+              type="date" 
+              value={dueDate} 
+              onChange={(e) => setDueDate(e.target.value)} 
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white font-medium text-gray-700 focus:outline-none shadow-sm cursor-pointer" 
+            />
           </div>
-        ) : (
-          <form onSubmit={handleFormSubmit} className="space-y-6">
-            {error && (
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-xs font-semibold text-red-600">
-                {error}
-              </div>
-            )}
+        </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider">Assessment Title</label>
-                <input type="text" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Organic Chemistry Midterm" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider">Target Focus Topic</label>
-                <input type="text" required value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g., Nucleophilic Substitution" className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all" />
-              </div>
-            </div>
+        {/* Table Configurator */}
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-12 text-[11px] font-bold text-gray-400 uppercase tracking-wider px-2">
+            <div className="col-span-6">Question Type</div>
+            <div className="col-span-3 text-center">No. of Questions</div>
+            <div className="col-span-3 text-center">Marks</div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider">Difficulty Level</label>
-                <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all cursor-pointer">
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider">Time Limit (Minutes)</label>
-                <input type="number" min="5" max="300" required value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/10 focus:border-orange-500 transition-all" />
-              </div>
-            </div>
+          <div className="space-y-3">
+            {rows.map((row) => (
+              <div key={row.id} className="grid grid-cols-12 items-center gap-4">
+                <div className="col-span-6 flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <select 
+                      value={row.type} 
+                      onChange={(e) => setRows(rows.map(r => r.id === row.id ? { ...r, type: e.target.value } : r))} 
+                      className="w-full pl-4 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm bg-white appearance-none focus:outline-none font-medium text-gray-800 shadow-sm"
+                    >
+                      {questionTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => deleteRow(row.id)} 
+                    disabled={rows.length === 1} 
+                    className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-20 transition-colors"
+                  >
+                    <X className="h-4 w-4" strokeWidth={2.5} />
+                  </button>
+                </div>
 
-            <div className="space-y-2">
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-wider">Reference Materials (Optional)</label>
-              <div className="border-2 border-dashed border-gray-200 hover:border-orange-400 bg-gray-50/50 rounded-2xl p-6 text-center relative transition-colors group">
-                <input type="file" accept=".pdf,.txt,.doc,.docx" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
-                <UploadCloud className="h-8 w-8 text-gray-300 group-hover:text-orange-500 mx-auto transition-colors" />
-                <p className="text-xs font-bold text-gray-700 mt-2">{selectedFile ? selectedFile.name : "Drag & Drop reference syllabus documents or click here"}</p>
-              </div>
-            </div>
+                <div className="col-span-3 flex items-center justify-center">
+                  <div className="flex items-center bg-gray-50/50 border border-gray-200 rounded-xl p-1.5 w-full max-w-[130px]">
+                    <button type="button" onClick={() => updateRow(row.id, "count", -1)} className="h-7 w-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center font-bold text-gray-500">-</button>
+                    <span className="flex-1 text-center font-bold text-sm text-gray-800">{row.count}</span>
+                    <button type="button" onClick={() => updateRow(row.id, "count", 1)} className="h-7 w-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center font-bold text-gray-500">+</button>
+                  </div>
+                </div>
 
-            <div className="pt-4 border-t border-gray-100 flex justify-end">
-              <button type="submit" disabled={submitting} className="bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white text-xs font-bold px-6 py-3 rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer">
-                {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Engaging VedaAI Models...</span></> : <><PlusCircle className="h-4 w-4" /><span>Generate Test Layout</span></>}
-              </button>
-            </div>
-          </form>
-        )}
+                <div className="col-span-3 flex items-center justify-center">
+                  <div className="flex items-center bg-gray-50/50 border border-gray-200 rounded-xl p-1.5 w-full max-w-[130px]">
+                    <button type="button" onClick={() => updateRow(row.id, "marks", -1)} className="h-7 w-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center font-bold text-gray-500">-</button>
+                    <span className="flex-1 text-center font-bold text-sm text-gray-800">{row.marks}</span>
+                    <button type="button" onClick={() => updateRow(row.id, "marks", 1)} className="h-7 w-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center font-bold text-gray-500">+</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button type="button" onClick={addRow} className="flex items-center gap-2 text-xs font-bold text-white bg-[#1a1a1a] hover:bg-black rounded-xl px-4 py-2.5 shadow-sm mt-2">
+            <Plus className="h-3.5 w-3.5" strokeWidth={3} /> Add Question Type
+          </button>
+        </div>
+
+        {/* Counter Summary Panel */}
+        <div className="flex flex-col items-end gap-1.5 text-xs font-bold text-gray-400 pr-4 pt-2 border-t border-gray-100">
+          <div>Total Questions : <span className="text-gray-800 text-sm font-extrabold ml-1">{totalQuestions}</span></div>
+          <div>Total Marks : <span className="text-gray-800 text-sm font-extrabold ml-1">{totalMarks}</span></div>
+        </div>
+
+        {/* Additional Input Box - This supplies the title and topic value context to the generator now */}
+        <div className="space-y-2 pt-2">
+          <label className="text-xs font-bold text-gray-800 block">Additional Information (For better output)</label>
+          <div className="relative">
+            <textarea 
+              rows={3} 
+              placeholder="e.g. Generate a question paper for 3 hour exam duration..." 
+              value={additionalInfo} 
+              onChange={(e) => setAdditionalInfo(e.target.value)} 
+              className="w-full p-4 pr-12 border border-gray-200 rounded-2xl text-sm focus:outline-none resize-none text-gray-800 font-medium bg-gray-50/30 focus:bg-white placeholder-gray-300 transition-all shadow-sm" 
+            />
+            <button type="button" className="absolute right-4 bottom-4 h-8 w-8 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900">
+              <Mic className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Row */}
+      <div className="flex items-center justify-between px-2 pt-2">
+        <button type="button" onClick={() => router.back()} className="border border-gray-200 bg-white px-6 py-2.5 rounded-xl text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50">
+          ← Previous
+        </button>
+        <button 
+          type="button"
+          onClick={handleSubmit} 
+          disabled={loading} 
+          className="bg-[#1a1a1a] hover:bg-black text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2 disabled:opacity-50"
+        >
+          {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <>Next →</>}
+        </button>
       </div>
     </div>
   );

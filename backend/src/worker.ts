@@ -7,103 +7,143 @@ import { Question } from './models/Question';
 
 dotenv.config();
 
-// 1. Initialize Gemini Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-const redisConnection = new IORedis(process.env.REDIS_URL || '', {
+const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
 
 export const startWorker = () => {
+  console.log("BullMQ Worker initialization listener started...");
+
   const worker = new Worker(
     'assessment-generation',
     async (job: Job) => {
-      const { assessmentId, title, topic, difficulty } = job.data;
-      console.log(`\nProcessing AI generation for Assessment: "${title}" (ID: ${assessmentId})`);
+      // additionalInfo extracted from the payload
+      const { assessmentId, difficulty, questionConfigs, file, additionalInfo } = job.data;
+      console.log(`\n==================================================`);
+      console.log(`[Job ${job.id}] Started processing for Assessment ID: ${assessmentId}`);
+      console.log(`Teacher Notes / Instructions: "${additionalInfo || 'None provided'}"`);
 
       try {
-        // 2. Draft the specialized generation prompt
+        console.log("Checkpoint 1: Parsing configurations...");
+        const configurations = questionConfigs && questionConfigs.length > 0 ? questionConfigs : [];
+
+        const configPrompt = configurations.map((c: any) => 
+          `- ${c.count} x "${c.type}" (worth ${c.marks} marks each)`
+        ).join('\n');
+
+        // Reference file text placeholder if available
+        const fileContext = file ? `Reference File Name Provided: ${file.originalname}.` : '';
+
+        // PROMPT ENGINEERING: Injecting additionalInfo purely to guide custom generation behavior
         const prompt = `
-          You are an expert examiner. Generate exactly 5 challenging multiple-choice questions (MCQs) for an assessment.
+          You are an expert academic examiner building an official exam paper.
           
-          Topic: ${topic}
+          Context & Source Material:
+          ${fileContext}
+          
+          CRITICAL TEACHER INSTRUCTIONS (Incorporate these requirements perfectly into the question styles):
+          "${additionalInfo || 'Generate standard textbook concept questions on the general topic of the document.'}"
+          
           Target Difficulty Level: ${difficulty}
           
-          Requirements for each question:
-          - The question must be highly relevant to the topic.
-          - Provide exactly 4 options.
-          - Specify the exact correct answer text (matching one of the options).
-          - Provide a clear explanation of why that answer is correct.
+          You MUST generate a JSON object matching this structural request distribution:
+          ${configPrompt}
+          
+          CRITICAL GENERATION INSTRUCTIONS:
+          1. Auto-generate a clean, concise, professional academic title (3-5 words max) for this assessment based on the instructions or file name. Do not include quotes.
+          2. For non-MCQ question types (Short Questions, Numerical, Diagram-Based, etc.), provide an empty string array [] for the "options" field.
+          3. Ensure the "marks" field value matches requested rules perfectly.
         `;
 
-        // 3. Call Gemini with Strict JSON Output Schema
+        console.log("Checkpoint 2: Calling Gemini AI API model engine...");
+        
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-2.5-flash', 
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
               properties: {
+                // FIXED: Gemini will now dynamically output a professional title object
+                assessmentTitle: { type: Type.STRING, description: "A concise, professional title summarizing this exam paper." },
                 questions: {
                   type: Type.ARRAY,
                   items: {
                     type: Type.OBJECT,
                     properties: {
                       questionText: { type: Type.STRING },
-                      options: { 
-                        type: Type.ARRAY, 
-                        items: { type: Type.STRING } 
-                      },
+                      options: { type: Type.ARRAY, items: { type: Type.STRING } },
                       correctAnswer: { type: Type.STRING },
-                      explanation: { type: Type.STRING }
+                      explanation: { type: Type.STRING },
+                      marks: { type: Type.NUMBER },
+                      questionType: { type: Type.STRING }
                     },
-                    required: ['questionText', 'options', 'correctAnswer', 'explanation'],
+                    required: ['questionText', 'options', 'correctAnswer', 'explanation', 'marks', 'questionType'],
                   }
                 }
               },
-              required: ['questions'],
+              required: ['assessmentTitle', 'questions'],
             }
           }
         });
 
-        // 4. Parse the AI result securely
+        console.log("Checkpoint 3: Gemini responded successfully. Parsing text string...");
         const responseText = response.text;
-        if (!responseText) {
-          throw new Error('Gemini AI returned an empty response.');
-        }
+        if (!responseText) throw new Error('Gemini AI returned a completely empty text stream.');
 
         const data = JSON.parse(responseText);
         const aiQuestions = data.questions;
+        const generatedTitle = data.assessmentTitle || "Untitled AI Assessment";
 
-        console.log(`Generated ${aiQuestions.length} questions successfully from Gemini.`);
+        console.log(`AI Generated Title: "${generatedTitle}"`);
 
-        // 5. Bulk insert questions into MongoDB mapped to this assessment
+        if (!aiQuestions || !Array.isArray(aiQuestions)) {
+          throw new Error("Parsed JSON does not contain a valid 'questions' array object.");
+        }
+
+        console.log(`Checkpoint 4: Mapping ${aiQuestions.length} parsed AI questions to MongoDB documents...`);
+        
+        const mapToDatabaseEnum = (typeStr: string): 'mcq' | 'subjective' | 'coding' => {
+          const cleaned = typeStr.toLowerCase().trim();
+          if (cleaned.includes('choice') || cleaned.includes('mcq')) return 'mcq'; 
+          if (cleaned.includes('coding') || cleaned.includes('program')) return 'coding';
+          return 'subjective'; 
+        };
+
         const questionDocs = aiQuestions.map((q: any) => ({
           assessmentId,
-          questionText: q.questionText,
-          options: q.options,
-          correctAnswer: q.correctAnswer,
-          explanation: q.explanation,
-          questionType: 'mcq',
-          sectionName: 'Core Concepts',
+          questionText: q.questionText || "Sample Question Description Entry",
+          options: mapToDatabaseEnum(q.questionType) === 'mcq' && Array.isArray(q.options) ? q.options : undefined,
+          correctAnswer: q.correctAnswer || "Solution reference placeholder",
+          explanation: q.explanation || "No clarification provided.",
+          questionType: mapToDatabaseEnum(q.questionType), 
+          marks: Number(q.marks) || 1,
+          sectionName: q.questionType || 'Core Concepts',
         }));
 
         const savedQuestions = await Question.insertMany(questionDocs);
         const questionIds = savedQuestions.map(doc => doc._id);
 
-        // 6. Link question IDs back to the master Assessment and flip status to 'completed'
+        console.log("Checkpoint 5: Updating Assessment status and setting title to completed...");
+        
+        // Updates BOTH the dynamic questions array, status, AND saves the new clean generated title!
         await Assessment.findByIdAndUpdate(assessmentId, {
+          title: generatedTitle,
+          topic: generatedTitle,
           questions: questionIds,
           status: 'completed',
         });
 
-        console.log(`Saved questions to DB and marked Assessment ${assessmentId} as completed!`);
+        console.log(`Success! Worker finished processing job ${job.id}`);
+        console.log(`==================================================`);
 
       } catch (err: any) {
-        console.error(`Failed to process job ${job.id}:`, err);
+        console.error(`\nWORKER CRASHED AT A CHECKPOINT! Job ID ${job.id} failed.`);
+        console.error(`Error Message:`, err.message);
         
-        // Update assessment status to failed if generation crashes
         await Assessment.findByIdAndUpdate(assessmentId, { status: 'failed' });
         throw err;
       }
@@ -111,13 +151,6 @@ export const startWorker = () => {
     { connection: redisConnection }
   );
 
-  worker.on('completed', (job) => {
-    console.log(`Background Job ${job.id} finalized successfully.`);
-  });
-
-  worker.on('failed', (job, err) => {
-    console.error(`Background Job ${job?.id} failed out permanently:`, err.message);
-  });
-
-  console.log('Background Worker registered and listening for AI generation jobs...');
+  worker.on('completed', (job) => console.log(`Job ${job.id} finalized event emitted.`));
+  worker.on('failed', (job, err) => console.error(`Job ${job?.id} failed terminal execution event:`, err.message));
 };
