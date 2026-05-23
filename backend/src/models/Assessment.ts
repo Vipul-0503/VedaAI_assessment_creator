@@ -20,6 +20,10 @@ const AssessmentSchema = new Schema<IAssessment>(
     topic: { type: String, required: true },
     difficulty: { type: String, enum: ['easy', 'medium', 'hard'], required: true },
     timeLimit: { type: Number, required: true, default: 60 },
+    passingPercentage: {
+    type: Number,
+    default: 40, // Falls back to standard 40% if not explicitly defined by the teacher
+    },
     totalMarks: { type: Number, required: true, default: 0 },
     status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
     // <-- 2. Add this to your Schema definition to establish the relation link
