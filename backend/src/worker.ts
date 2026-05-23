@@ -1,9 +1,12 @@
 import { Worker, Job } from 'bullmq';
 import IORedis from 'ioredis';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import officeParser from 'officeparser';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Assessment } from './models/Assessment';
 import { Question } from './models/Question';
+import pdfParse from 'pdf-parse-fork';
 
 dotenv.config();
 
@@ -12,6 +15,20 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:6379', {
   maxRetriesPerRequest: null,
 });
+
+// Helper function to wrap officeparser into an async Promise block
+const parseOfficeFile = (filePath: string): Promise<string> => {
+  return new Promise((resolve) => {
+    officeParser.parseOffice(filePath, (data: string, err: any) => {
+      if (err) {
+        console.error("OfficeParser extraction error:", err);
+        resolve("");
+      } else {
+        resolve(data || "");
+      }
+    });
+  });
+};
 
 export const startWorker = () => {
   console.log("BullMQ Worker initialization listener started...");
@@ -27,6 +44,39 @@ export const startWorker = () => {
 
       try {
         console.log("Checkpoint 1: Parsing configurations...");
+        
+        let extractedSourceContent = "";
+        let inlineImagePart: any = null;
+
+        // Extract raw underlying content if a document layout cache is present
+        if (file && file.path && fs.existsSync(file.path)) {
+          const fileMime = file.mimetype.toLowerCase();
+          const fileExtension = file.originalname.toLowerCase().split('.').pop();
+
+          if (fileMime === 'application/pdf') {
+            console.log(`Extracting text content from uploaded PDF: ${file.originalname}`);
+            const dataBuffer = fs.readFileSync(file.path);
+  
+            const pdfData = await pdfParse(dataBuffer);
+            extractedSourceContent = pdfData.text;
+            console.log(`PDF text extraction completed (${extractedSourceContent.length} characters extracted).`);
+          }
+          else if (fileExtension === 'docx' || fileExtension === 'pptx' || fileMime.includes('wordprocessingml') || fileMime.includes('presentationml')) {
+            console.log(`Extracting text content from uploaded Office file: ${file.originalname}`);
+            extractedSourceContent = await parseOfficeFile(file.path);
+          }
+          else if (fileMime.includes('image/') || fileMime.includes('jpeg') || fileMime.includes('png')) {
+            console.log(`Preparing uploaded image for vision ingestion: ${file.originalname}`);
+            const imageBuffer = fs.readFileSync(file.path);
+            inlineImagePart = {
+              inlineData: {
+                data: imageBuffer.toString("base64"),
+                mimeType: file.mimetype
+              }
+            };
+          }
+        }
+
         const configurations = questionConfigs && questionConfigs.length > 0 ? questionConfigs : [];
 
         const configPrompt = configurations.map((c: any) => 
@@ -42,6 +92,7 @@ export const startWorker = () => {
           
           Context & Source Material:
           ${fileContext}
+          ${extractedSourceContent ? `--- BEGIN SOURCE DOCUMENT TEXT ---\n${extractedSourceContent}\n--- END SOURCE DOCUMENT TEXT ---` : ''}
           
           CRITICAL TEACHER INSTRUCTIONS (Incorporate these requirements perfectly into the question styles):
           "${additionalInfo || 'Generate standard textbook concept questions on the general topic of the document.'}"
@@ -59,9 +110,14 @@ export const startWorker = () => {
 
         console.log("Checkpoint 2: Calling Gemini AI API model engine...");
         
+        const contentsPayload: any[] = [prompt];
+        if (inlineImagePart) {
+          contentsPayload.push(inlineImagePart);
+        }
+
         const response = await ai.models.generateContent({
           model: 'gemini-2.5-flash', 
-          contents: prompt,
+          contents: contentsPayload,
           config: {
             responseMimeType: 'application/json',
             responseSchema: {
@@ -106,7 +162,7 @@ export const startWorker = () => {
 
         console.log(`Checkpoint 4: Mapping ${aiQuestions.length} parsed AI questions to MongoDB documents...`);
         
-        const mapToDatabaseEnum = (typeStr: string): 'mcq' | 'subjective' | 'coding' => {
+        const mapToDatabaseEnum = (typeStr: string): 'mcq' | 'subjective' | 'coding' | 'diagram' => {
           const cleaned = typeStr.toLowerCase().trim();
           if (cleaned.includes('choice') || cleaned.includes('mcq')) return 'mcq'; 
           if (cleaned.includes('coding') || cleaned.includes('program')) return 'coding';
@@ -136,6 +192,11 @@ export const startWorker = () => {
           questions: questionIds,
           status: 'completed',
         });
+
+        // Safely wipe out cache temporary storage document after pipeline success
+        if (file && file.path && fs.existsSync(file.path)) {
+          fs.unlinkSync(file.path);
+        }
 
         console.log(`Success! Worker finished processing job ${job.id}`);
         console.log(`==================================================`);

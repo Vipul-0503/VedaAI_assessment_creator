@@ -59,13 +59,11 @@ export default function CreateAssignment() {
   const totalMarks = rows.reduce((sum, r) => sum + (r.count * r.marks), 0);
 
   const handleSubmit = async () => {
-    // Fallback topic if additional info is completely empty
     const extractedTopic = additionalInfo.trim() || "Uploaded Document Assessment";
 
     setLoading(true);
     const formData = new FormData();
     
-    // Mapping back precisely to match your backend model constraints
     formData.append("title", extractedTopic); 
     formData.append("topic", extractedTopic);
     formData.append("difficulty", "Medium");
@@ -83,12 +81,9 @@ export default function CreateAssignment() {
       });
       if (response.ok) {
         const savedAssessment = await response.json();
-        
-        // Extract the fresh database identifier string
         const assessmentId = savedAssessment._id || savedAssessment.id;
         
         if (assessmentId) {
-          // Route straight to our beautiful polling layout
           router.push(`/create/loading/${assessmentId}`);
         } else {
           router.push("/");
@@ -129,7 +124,7 @@ export default function CreateAssignment() {
         </div>
       </header>
 
-      {/* Reverted exactly to Figma Header style */}
+      {/* Header Banner Section */}
       <div className="space-y-4 mt-2">
         <div className="flex items-center gap-3.5">
           <div className="flex items-center justify-center h-5 w-5 bg-emerald-100 rounded-full shrink-0">
@@ -157,7 +152,7 @@ export default function CreateAssignment() {
           ref={fileInputRef} 
           onChange={handleFileChange}
           className="hidden" 
-          accept="image/*,application/pdf" 
+          accept="image/*,application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" 
         />
 
         {/* Drag & Drop Frame */}
@@ -176,7 +171,8 @@ export default function CreateAssignment() {
           ) : (
             <div>
               <p className="text-sm font-semibold text-gray-700">Choose a file or drag & drop it here</p>
-              <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF up to 10MB</p>
+              {/* FIXED: Label matches extended office document parsing schemas */}
+              <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF, DOCX, PPTX up to 10MB</p>
             </div>
           )}
           <button type="button" className="text-xs font-bold text-gray-600 underline mt-4 hover:text-black">
@@ -184,9 +180,9 @@ export default function CreateAssignment() {
           </button>
         </div>
 
-        <p className="text-center text-[11px] font-medium text-gray-400 -mt-2">Upload images of your preferred document/image</p>
+        <p className="text-center text-[11px] font-medium text-gray-400 -mt-2">Upload images or core text materials of your preferred curriculum data</p>
 
-        {/* Due Date: Removed the Lucide icon element because input type="date" displays its own browser icon */}
+        {/* Due Date */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-800 block">Due Date</label>
           <div className="relative max-w-sm">
@@ -261,7 +257,7 @@ export default function CreateAssignment() {
           <div>Total Marks : <span className="text-gray-800 text-sm font-extrabold ml-1">{totalMarks}</span></div>
         </div>
 
-        {/* Additional Input Box - This supplies the title and topic value context to the generator now */}
+        {/* Additional Input Box */}
         <div className="space-y-2 pt-2">
           <label className="text-xs font-bold text-gray-800 block">Additional Information (For better output)</label>
           <div className="relative">

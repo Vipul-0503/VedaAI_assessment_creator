@@ -53,7 +53,8 @@ export default function GenerationLoadingScreen() {
           <div className="relative flex items-center justify-center">
             <div className="absolute h-24 w-24 rounded-full border-4 border-gray-100 border-t-orange-500 animate-spin"></div>
             <div className="h-16 w-16 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 shadow-sm animate-pulse">
-              <Sparkles className="h-6 w-6" />
+              {/* Replaced Sparkles with a clean, prominent V for VedaAI branding */}
+              <span className="text-2xl font-black font-sans tracking-tight">V</span>
             </div>
           </div>
           <div className="space-y-2">
