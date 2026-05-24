@@ -58,7 +58,12 @@ export default function CreateAssignment() {
   const totalQuestions = rows.reduce((sum, r) => sum + r.count, 0);
   const totalMarks = rows.reduce((sum, r) => sum + (r.count * r.marks), 0);
 
+  // GUARDRAIL: Form validation logic to protect backend context ingestion pipelines
+  const isFormValid = selectedFile !== null || additionalInfo.trim().length > 0;
+
   const handleSubmit = async () => {
+    if (!isFormValid) return; // Halt execution if requirements are bypassed
+
     const extractedTopic = additionalInfo.trim() || "Uploaded Document Assessment";
 
     setLoading(true);
@@ -76,9 +81,10 @@ export default function CreateAssignment() {
 
     try {
       const response = await fetch("http://localhost:5000/api/assessments", {
+        withCredentials: true,
         method: "POST",
         body: formData,
-      });
+      } as any);
       if (response.ok) {
         const savedAssessment = await response.json();
         const assessmentId = savedAssessment._id || savedAssessment.id;
@@ -171,7 +177,6 @@ export default function CreateAssignment() {
           ) : (
             <div>
               <p className="text-sm font-semibold text-gray-700">Choose a file or drag & drop it here</p>
-              {/* FIXED: Label matches extended office document parsing schemas */}
               <p className="text-xs text-gray-400 mt-0.5">JPEG, PNG, PDF, DOCX, PPTX up to 10MB</p>
             </div>
           )}
@@ -263,7 +268,7 @@ export default function CreateAssignment() {
           <div className="relative">
             <textarea 
               rows={3} 
-              placeholder="e.g. Generate a question paper for 3 hour exam duration..." 
+              placeholder="Provide a prompt topic or context overview here to begin..." 
               value={additionalInfo} 
               onChange={(e) => setAdditionalInfo(e.target.value)} 
               className="w-full p-4 pr-12 border border-gray-200 rounded-2xl text-sm focus:outline-none resize-none text-gray-800 font-medium bg-gray-50/30 focus:bg-white placeholder-gray-300 transition-all shadow-sm" 
@@ -280,14 +285,25 @@ export default function CreateAssignment() {
         <button type="button" onClick={() => router.back()} className="border border-gray-200 bg-white px-6 py-2.5 rounded-xl text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50">
           ← Previous
         </button>
-        <button 
-          type="button"
-          onClick={handleSubmit} 
-          disabled={loading} 
-          className="bg-[#1a1a1a] hover:bg-black text-white px-6 py-2.5 rounded-xl text-sm font-bold shadow-md flex items-center gap-2 disabled:opacity-50"
-        >
-          {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <>Next →</>}
-        </button>
+        <div className="relative group">
+          <button 
+            type="button"
+            onClick={handleSubmit} 
+            disabled={loading || !isFormValid} 
+            className={`text-sm font-bold px-6 py-2.5 rounded-xl shadow-md flex items-center gap-2 transition-all duration-200 ${
+              isFormValid 
+                ? "bg-[#1a1a1a] hover:bg-black text-white cursor-pointer" 
+                : "bg-gray-100 text-gray-400 cursor-not-allowed shadow-none"
+            }`}
+          >
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <>Next →</>}
+          </button>
+          {!isFormValid && (
+            <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block bg-gray-800 text-white text-[10px] py-1 px-2.5 rounded-md whitespace-nowrap shadow-md font-medium z-10">
+              Please upload a document or provide text context to generate.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
