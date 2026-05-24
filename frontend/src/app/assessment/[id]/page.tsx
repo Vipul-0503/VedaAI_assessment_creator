@@ -4,6 +4,9 @@ import { useState, useEffect, use } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, AlertCircle, Printer, Bell, ChevronDown, Download } from "lucide-react";
 
+// Dynamic backend configuration to seamlessly swap between local development and cloud production
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 interface Question {
   _id: string;
   type: string;
@@ -35,7 +38,8 @@ export default function AssessmentViewer({ params }: { params: Promise<{ id: str
   useEffect(() => {
     const fetchAssessmentData = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/assessments/${assessmentId}`);
+        // FIXED: Replaced hardcoded localhost path with the dynamic API configuration
+        const response = await fetch(`${API_BASE_URL}/api/assessments/${assessmentId}`);
         if (!response.ok) {
           throw new Error("Could not find the requested assessment profile.");
         }

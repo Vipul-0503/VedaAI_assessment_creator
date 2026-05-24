@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
+// Dynamic backend path configuration to swap environment routes between local testing and production clusters
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 export default function GenerationLoadingScreen() {
   const router = useRouter();
   const { id } = useParams(); // Retrieves the newly created assessment ID
@@ -15,7 +18,8 @@ export default function GenerationLoadingScreen() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/assessments/${id}`);
+        // FIXED: Swapped hardcoded localhost url with dynamic environment address matching production layers
+        const res = await fetch(`${API_BASE_URL}/api/assessments/${id}`);
         if (!res.ok) return;
         
         const data = await res.json();

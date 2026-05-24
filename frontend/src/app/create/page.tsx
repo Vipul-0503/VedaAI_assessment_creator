@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, LayoutGrid, Bell, ChevronDown, UploadCloud, Calendar, Plus, X, Mic, Loader2 } from "lucide-react";
 
+// Dynamic backend path configuration to swap environment routes between local testing and production clusters
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 interface QuestionRow {
   id: string;
   type: string;
@@ -16,7 +19,7 @@ export default function CreateAssignment() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // State Trackers bound back to the original Figma layout
+  // State Trackers bound back to the layout configurations
   const [loading, setLoading] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState(""); 
@@ -80,11 +83,12 @@ export default function CreateAssignment() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/assessments", {
-        withCredentials: true,
+      // FIXED: Swapped hardcoded localhost url with dynamic environment address matching production layers
+      const response = await fetch(`${API_BASE_URL}/api/assessments`, {
         method: "POST",
         body: formData,
-      } as any);
+      });
+
       if (response.ok) {
         const savedAssessment = await response.json();
         const assessmentId = savedAssessment._id || savedAssessment.id;

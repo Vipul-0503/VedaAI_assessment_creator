@@ -4,6 +4,10 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Bell, ChevronDown, SlidersHorizontal, MoreVertical, Plus, FileCheck2, Loader2, LayoutGrid, Calendar, Trash2, Edit3, Download, AlertTriangle } from "lucide-react";
 
+// Dynamic URLs to seamlessly swap between local development and live cloud production
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const FRONTEND_BASE_URL = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+
 interface Assessment {
   _id: string;
   title: string;
@@ -32,7 +36,7 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchAssessments() {
       try {
-        const response = await fetch("http://localhost:5000/api/assessments");
+        const response = await fetch(`${API_BASE_URL}/api/assessments`);
         if (response.ok) {
           const data = await response.json();
           setAssessments(data);
@@ -63,7 +67,7 @@ export default function Dashboard() {
     if (!deleteTargetId) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/assessments/${deleteTargetId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/assessments/${deleteTargetId}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -92,7 +96,7 @@ export default function Dashboard() {
     }
 
     try {
-      const res = await fetch(`http://localhost:5000/api/assessments/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/assessments/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: editTitleValue.trim() }),
@@ -118,7 +122,7 @@ export default function Dashboard() {
     const iframe = document.createElement("iframe");
     
     // Passing flag parameters ensures your page knows it's being exported and preserves the answer key block
-    iframe.src = `http://localhost:3000/assessment/${id}?print=true&includeAnswers=true`;
+    iframe.src = `${FRONTEND_BASE_URL}/assessment/${id}?print=true&includeAnswers=true`;
     
     // Position it safely off-screen so user doesn't see it layout rendering
     iframe.style.position = "absolute";
