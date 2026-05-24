@@ -6,6 +6,7 @@ import officeParser from 'officeparser';
 import { GoogleGenAI, Type } from '@google/genai';
 import { Assessment } from './models/Assessment';
 import { Question } from './models/Question';
+// @ts-ignore
 import pdfParse from 'pdf-parse-fork';
 
 dotenv.config();
@@ -19,9 +20,9 @@ const redisConnection = new IORedis(process.env.REDIS_URL || 'redis://127.0.0.1:
 // Helper function to wrap officeparser into an async Promise block
 const parseOfficeFile = (filePath: string): Promise<string> => {
   return new Promise((resolve) => {
-    officeParser.parseOffice(filePath, (data: string, err: any) => {
+    officeParser.parseOffice(filePath, (err: any, data: string) => {
       if (err) {
-        console.error("OfficeParser extraction error:", err);
+        console.error(err);
         resolve("");
       } else {
         resolve(data || "");
